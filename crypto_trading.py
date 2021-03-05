@@ -5,16 +5,18 @@ import json
 import os
 import random
 import time
-from typing import List, Dict
+from typing import Dict, List
 
-from binance_api_manager import BinanceAPIManager
 from sqlalchemy.orm import Session
 
-from database import set_coins, set_current_coin, get_current_coin, get_pairs_from, \
-    db_session, create_database, get_pair, log_scout, CoinValue, prune_scout_history, prune_value_history, send_update
+from binance_api_manager import BinanceAPIManager
+from database import (CoinValue, create_database, db_session, get_current_coin,
+                      get_pair, get_pairs_from, log_scout, prune_scout_history,
+                      prune_value_history, send_update, set_coins,
+                      set_current_coin)
+from logger import Logger
 from models import Coin, Pair
 from scheduler import SafeScheduler
-from logger import Logger
 
 # Config consts
 CFG_FL_NAME = 'user.cfg'
@@ -166,8 +168,6 @@ def scout(client: BinanceAPIManager, transaction_fee=0.001, multiplier=5):
     all_tickers = client.get_all_market_tickers()
 
     current_coin = get_current_coin()
-    #Display on the console, the current coin+Bridge, so users can see *some* activity and not thinkg the bot has stopped. Not logging though to reduce log size.
-    print( str( datetime.datetime.now() ) + " - CONSOLE - INFO - I am scouting the best trades. Current coin: {0} ".format( current_coin + BRIDGE ) , end='\r')
 
     current_coin_price = get_market_ticker_price_from_list(all_tickers, current_coin + BRIDGE)
 
@@ -181,6 +181,8 @@ def scout(client: BinanceAPIManager, transaction_fee=0.001, multiplier=5):
         if not pair.to_coin.enabled:
             continue
         optional_coin_price = get_market_ticker_price_from_list(all_tickers, pair.to_coin + BRIDGE)
+        #Display on the console, the current coin pair and bridge coin, so users can see *some* activity and not thinkg the bot has stopped. Not logging though to reduce log size.
+        print( str( datetime.datetime.now() ) + " - CONSOLE - INFO - I am scouting the best trades. Examining coin pair: {}{} via bridge {} ".format( current_coin, pair.to_coin, BRIDGE ) , end='\r')
 
         if optional_coin_price is None:
             logger.info("Skipping scouting... optional coin {0} not found".format(pair.to_coin + BRIDGE))
@@ -284,6 +286,8 @@ def main():
     schedule.every(1).minutes.do(update_values, client=client).tag("updating value history")
     schedule.every(1).minutes.do(prune_scout_history, hours=SCOUT_HISTORY_PRUNE_TIME).tag("pruning scout history")
     schedule.every(1).hours.do(prune_value_history).tag("pruning value history")
+
+    logger.info("Finished initializing and start with scouting. Please stand by.")
 
     while True:
         schedule.run_pending()
